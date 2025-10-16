@@ -39,7 +39,7 @@ impl AppConfig {
 
             redis_url: env::var("REDIS_URL").context("ZORUNLU: REDIS_URL eksik")?,
             user_service_url: env::var("USER_SERVICE_TARGET_GRPC_URL").context("ZORUNLU: USER_SERVICE_TARGET_GRPC_URL eksik")?,
-            sip_realm: env::var("SIP_SIGNALING_REALM").context("ZORUNLU: SIP_SIGNALING_REALM eksik")?,
+            sip_realm: env::var("SIP_SIGNALING_SERVICE_REALM").context("ZORUNLU: SIP_SIGNALING_SERVICE_REALM eksik")?,
             
             env: env::var("ENV").unwrap_or_else(|_| "production".to_string()),
             rust_log: env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
