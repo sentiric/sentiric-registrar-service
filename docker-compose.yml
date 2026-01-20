@@ -32,6 +32,8 @@ services:
       dockerfile: Dockerfile
 
     environment:
+      - ENV=development
+      - RUST_LOG=info,sentiric_registrar_service=info
       # --- Network
       # IP: 10.88.30.6  =>  Port Bloğu: 1306X
       - REGISTRAR_SERVICE_IPV4_ADDRESS=10.88.30.6
@@ -39,6 +41,11 @@ services:
       - REGISTRAR_SERVICE_GRPC_PORT=13061
       - REGISTRAR_SERVICE_METRICS_PORT=13062
       - REGISTRAR_SERVICE_HOST=registrar-service
+
+      # 
+      - REDIS_URL=${REDIS_URL}
+      - USER_SERVICE_TARGET_GRPC_URL=https://user-service:14061
+      - SIP_SIGNALING_SERVICE_REALM=sentiric_demo
 
       # --- Security
       - GRPC_TLS_CA_PATH=/sentiric-certificates/certs/ca.crt

@@ -834,6 +834,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
+name = "md5"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
+
+[[package]]
 name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1409,8 +1415,8 @@ dependencies = [
 
 [[package]]
 name = "sentiric-contracts"
-version = "1.9.0"
-source = "git+https://github.com/sentiric/sentiric-contracts.git?tag=v1.9.0#195fc910ff10d2bd9651bd251ba0480b809a03e5"
+version = "1.13.3"
+source = "git+https://github.com/sentiric/sentiric-contracts.git?tag=v1.13.3#130a6c9aba1dd66f997a2460a1d7561454bd27dc"
 dependencies = [
  "prost",
  "prost-types",
@@ -1421,12 +1427,13 @@ dependencies = [
 
 [[package]]
 name = "sentiric-registrar-service"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "config",
  "dotenvy",
  "hyper",
+ "md5",
  "prost",
  "redis",
  "sentiric-contracts",
