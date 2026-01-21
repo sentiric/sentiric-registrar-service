@@ -5,7 +5,7 @@ use anyhow::Result;
 use sentiric_contracts::sentiric::user::v1::user_service_client::UserServiceClient;
 use tonic::transport::{Channel, ClientTlsConfig, Certificate, Identity};
 use std::time::Duration;
-use tracing::info; // DÜZELTME: 'warn' kaldırıldı
+use tracing::{info, warn};
 
 pub struct InternalClients {
     pub user: UserServiceClient<Channel>,
@@ -23,8 +23,12 @@ impl InternalClients {
 }
 
 async fn create_secure_channel(url: &str, server_name: &str, config: &AppConfig) -> Result<Channel> {
-    let target_url = if url.starts_with("http") {
+    // DÜZELTME: URL Normalizasyonu (http -> https zorlama ve prefix kontrolü)
+    let target_url = if url.starts_with("https://") {
         url.to_string()
+    } else if url.starts_with("http://") {
+        warn!(url, "Güvensiz şema (http) algılandı, HTTPS'e zorlanıyor.");
+        url.replace("http://", "https://")
     } else {
         format!("https://{}", url)
     };
@@ -40,11 +44,14 @@ async fn create_secure_channel(url: &str, server_name: &str, config: &AppConfig)
         .ca_certificate(ca_certificate)
         .identity(identity);
 
+    info!(url=%target_url, server_name=%server_name, "Güvenli gRPC kanalına bağlanılıyor...");
+
     let channel = Channel::from_shared(target_url)?
         .connect_timeout(Duration::from_secs(5))
         .tls_config(tls_config)?
         .connect()
         .await?;
 
+    info!("gRPC bağlantısı başarılı.");
     Ok(channel)
 }
