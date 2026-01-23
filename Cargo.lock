@@ -1437,11 +1437,23 @@ dependencies = [
  "prost",
  "redis",
  "sentiric-contracts",
+ "sentiric-sip-core",
  "thiserror",
  "tokio",
  "tonic",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "sentiric-sip-core"
+version = "1.2.3"
+source = "git+https://github.com/sentiric/sentiric-sip-core.git?tag=v1.2.3#cff3e4aa07e6ea21508021be25b607bcdb341ac0"
+dependencies = [
+ "once_cell",
+ "regex",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
