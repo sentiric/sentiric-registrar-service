@@ -14,6 +14,8 @@ use crate::grpc::client::InternalClients;
 
 pub struct MyRegistrarService {
     redis: Arc<Mutex<redis::aio::MultiplexedConnection>>,
+    // DÜZELTME: Gelecekteki Auth işlemleri için tutuyoruz, şimdilik uyarıyı bastır.
+    #[allow(dead_code)]
     clients: Arc<Mutex<InternalClients>>,
 }
 
