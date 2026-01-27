@@ -1,6 +1,6 @@
 [package]
 name = "sentiric-registrar-service"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 
 [dependencies]
@@ -17,5 +17,6 @@ config = "0.14"
 redis = { version = "0.26", features = ["tokio-rustls-comp"] }
 md5 = "0.7"
 
-sentiric-contracts = { git = "https://github.com/sentiric/sentiric-contracts.git", tag = "v1.13.4" }
+# GÜNCELLEME: Platform geneli tutarlılık için v1.13.5 sürümüne yükseltildi.
+sentiric-contracts = { git = "https://github.com/sentiric/sentiric-contracts.git", tag = "v1.13.5" }
 sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.2.9" }
