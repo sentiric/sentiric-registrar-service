@@ -9,8 +9,35 @@ use sentiric_contracts::sentiric::sip::v1::{
     LookupContactRequest, LookupContactResponse
 };
 use tonic::{Request, Response, Status};
-use tracing::{info, error, instrument};
+use tracing::{info, error, instrument, debug};
 use crate::grpc::client::InternalClients;
+
+/// SIP URI'yı normalize eder: user@domain formatına çevirir.
+/// Desteklenen formatlar:
+///   - "sip:user@domain" → "user@domain"
+///   - "<sip:user@domain>" → "user@domain"  
+///   - "user@domain" → "user@domain" (değişmez)
+///   - "<sip:user@domain;transport=udp>" → "user@domain"
+fn normalize_sip_uri(uri: &str) -> String {
+    let mut s = uri.trim();
+    
+    // Açı parantezlerini temizle: <...>
+    s = s.trim_start_matches('<').trim_end_matches('>');
+    
+    // sip: veya sips: prefix'ini temizle
+    if s.starts_with("sip:") {
+        s = &s[4..];
+    } else if s.starts_with("sips:") {
+        s = &s[5..];
+    }
+    
+    // URI parametrelerini temizle: ;transport=udp, ;user=phone vb.
+    if let Some(semicolon_idx) = s.find(';') {
+        s = &s[..semicolon_idx];
+    }
+    
+    s.to_string()
+}
 
 pub struct MyRegistrarService {
     redis: Arc<Mutex<redis::aio::MultiplexedConnection>>,
@@ -37,9 +64,11 @@ impl RegistrarService for MyRegistrarService {
         request: Request<RegisterRequest>,
     ) -> Result<Response<RegisterResponse>, Status> {
         let req = request.into_inner();
-        let key = format!("sip_registration:{}", req.sip_uri);
+        let normalized_uri = normalize_sip_uri(&req.sip_uri);
+        let key = format!("sip_registration:{}", normalized_uri);
         
-        info!("Kayıt işlemi: {} -> {} (Expires: {})", req.sip_uri, req.contact_uri, req.expires);
+        debug!("URI Normalizasyonu: '{}' -> '{}'", req.sip_uri, normalized_uri);
+        info!("Kayıt işlemi: {} -> {} (Expires: {})", normalized_uri, req.contact_uri, req.expires);
 
         // Redis'e yaz
         let mut conn = self.redis.lock().await;
@@ -60,7 +89,8 @@ impl RegistrarService for MyRegistrarService {
         request: Request<UnregisterRequest>,
     ) -> Result<Response<UnregisterResponse>, Status> {
         let req = request.into_inner();
-        let key = format!("sip_registration:{}", req.sip_uri);
+        let normalized_uri = normalize_sip_uri(&req.sip_uri);
+        let key = format!("sip_registration:{}", normalized_uri);
         
         let mut conn = self.redis.lock().await;
         let _: () = conn.del(&key)
@@ -70,7 +100,7 @@ impl RegistrarService for MyRegistrarService {
                 Status::internal("Redis Error")
             })?;
 
-        info!("Kayıt silindi: {}", req.sip_uri);
+        info!("Kayıt silindi: {}", normalized_uri);
         Ok(Response::new(UnregisterResponse { success: true }))
     }
 
@@ -80,20 +110,23 @@ impl RegistrarService for MyRegistrarService {
         request: Request<LookupContactRequest>,
     ) -> Result<Response<LookupContactResponse>, Status> {
         let req = request.into_inner();
-        let key = format!("sip_registration:{}", req.sip_uri);
+        let normalized_uri = normalize_sip_uri(&req.sip_uri);
+        let key = format!("sip_registration:{}", normalized_uri);
+        
+        debug!("Lookup URI Normalizasyonu: '{}' -> '{}'", req.sip_uri, normalized_uri);
         
         let mut conn = self.redis.lock().await;
         // Redis'ten oku (String döner)
         let contact: Option<String> = conn.get(&key).await.ok();
 
         if let Some(c) = contact {
-            info!("Lookup başarılı: {} -> {}", req.sip_uri, c);
+            info!("Lookup başarılı: {} -> {}", normalized_uri, c);
             Ok(Response::new(LookupContactResponse { 
                 contact_uris: vec![c] 
             }))
         } else {
             // Eğer Redis'te yoksa boş liste dön
-            info!("Lookup başarısız (Kayıt yok): {}", req.sip_uri);
+            info!("Lookup başarısız (Kayıt yok): {}", normalized_uri);
             Ok(Response::new(LookupContactResponse { 
                 contact_uris: vec![] 
             }))
