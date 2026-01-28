@@ -14,10 +14,9 @@ use crate::grpc::client::InternalClients;
 
 /// SIP URI'yı normalize eder: user@domain formatına çevirir.
 /// Desteklenen formatlar:
-///   - "sip:user@domain" → "user@domain"
-///   - "<sip:user@domain>" → "user@domain"  
-///   - "user@domain" → "user@domain" (değişmez)
-///   - "<sip:user@domain;transport=udp>" → "user@domain"
+///   - "sip:user@domain" -> "user@domain"
+///   - "<sip:user@domain>" -> "user@domain"  
+///   - "user@domain" -> "user@domain" (değişmez)
 fn normalize_sip_uri(uri: &str) -> String {
     let mut s = uri.trim();
     
@@ -41,7 +40,6 @@ fn normalize_sip_uri(uri: &str) -> String {
 
 pub struct MyRegistrarService {
     redis: Arc<Mutex<redis::aio::MultiplexedConnection>>,
-    // DÜZELTME: Gelecekteki Auth işlemleri için tutuyoruz, şimdilik uyarıyı bastır.
     #[allow(dead_code)]
     clients: Arc<Mutex<InternalClients>>,
 }
@@ -64,15 +62,16 @@ impl RegistrarService for MyRegistrarService {
         request: Request<RegisterRequest>,
     ) -> Result<Response<RegisterResponse>, Status> {
         let req = request.into_inner();
+        
+        // KRİTİK DÜZELTME: Normalizasyon
         let normalized_uri = normalize_sip_uri(&req.sip_uri);
         let key = format!("sip_registration:{}", normalized_uri);
         
-        debug!("URI Normalizasyonu: '{}' -> '{}'", req.sip_uri, normalized_uri);
+        debug!("URI Normalizasyonu: '{}' -> '{}' -> Key: {}", req.sip_uri, normalized_uri, key);
         info!("Kayıt işlemi: {} -> {} (Expires: {})", normalized_uri, req.contact_uri, req.expires);
 
-        // Redis'e yaz
         let mut conn = self.redis.lock().await;
-        // DÜZELTME: req.expires (int32) -> u64 dönüşümü yapıldı
+        // Expires i32 -> u64 dönüşümü
         let _: () = conn.set_ex(&key, &req.contact_uri, req.expires as u64)
             .await
             .map_err(|e| {
@@ -89,6 +88,8 @@ impl RegistrarService for MyRegistrarService {
         request: Request<UnregisterRequest>,
     ) -> Result<Response<UnregisterResponse>, Status> {
         let req = request.into_inner();
+        
+        // KRİTİK DÜZELTME: Normalizasyon
         let normalized_uri = normalize_sip_uri(&req.sip_uri);
         let key = format!("sip_registration:{}", normalized_uri);
         
@@ -110,13 +111,14 @@ impl RegistrarService for MyRegistrarService {
         request: Request<LookupContactRequest>,
     ) -> Result<Response<LookupContactResponse>, Status> {
         let req = request.into_inner();
+        
+        // KRİTİK DÜZELTME: Normalizasyon
         let normalized_uri = normalize_sip_uri(&req.sip_uri);
         let key = format!("sip_registration:{}", normalized_uri);
         
         debug!("Lookup URI Normalizasyonu: '{}' -> '{}'", req.sip_uri, normalized_uri);
         
         let mut conn = self.redis.lock().await;
-        // Redis'ten oku (String döner)
         let contact: Option<String> = conn.get(&key).await.ok();
 
         if let Some(c) = contact {
@@ -125,7 +127,6 @@ impl RegistrarService for MyRegistrarService {
                 contact_uris: vec![c] 
             }))
         } else {
-            // Eğer Redis'te yoksa boş liste dön
             info!("Lookup başarısız (Kayıt yok): {}", normalized_uri);
             Ok(Response::new(LookupContactResponse { 
                 contact_uris: vec![] 
