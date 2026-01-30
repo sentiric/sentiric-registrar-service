@@ -12,29 +12,17 @@ use tonic::{Request, Response, Status};
 use tracing::{info, error, instrument, debug};
 use crate::grpc::client::InternalClients;
 
-/// SIP URI'yı normalize eder: user@domain formatına çevirir.
-/// Desteklenen formatlar:
-///   - "sip:user@domain" -> "user@domain"
-///   - "<sip:user@domain>" -> "user@domain"  
-///   - "user@domain" -> "user@domain" (değişmez)
 fn normalize_sip_uri(uri: &str) -> String {
     let mut s = uri.trim();
-    
-    // Açı parantezlerini temizle: <...>
     s = s.trim_start_matches('<').trim_end_matches('>');
-    
-    // sip: veya sips: prefix'ini temizle
     if s.starts_with("sip:") {
         s = &s[4..];
     } else if s.starts_with("sips:") {
         s = &s[5..];
     }
-    
-    // URI parametrelerini temizle: ;transport=udp, ;user=phone vb.
     if let Some(semicolon_idx) = s.find(';') {
         s = &s[..semicolon_idx];
     }
-    
     s.to_string()
 }
 
@@ -56,14 +44,14 @@ impl MyRegistrarService {
 #[tonic::async_trait]
 impl RegistrarService for MyRegistrarService {
     
-    #[instrument(skip(self), fields(sip_uri = %request.get_ref().sip_uri))]
+    #[instrument(skip(self), fields(sip_uri = %request.get_ref().sip_uri, contact = %request.get_ref().contact_uri))]
     async fn register(
         &self,
         request: Request<RegisterRequest>,
     ) -> Result<Response<RegisterResponse>, Status> {
+        info!("🔫 [TRACE-REGISTRAR] Register isteği alındı.");
         let req = request.into_inner();
         
-        // KRİTİK DÜZELTME: Normalizasyon
         let normalized_uri = normalize_sip_uri(&req.sip_uri);
         let key = format!("sip_registration:{}", normalized_uri);
         
@@ -71,7 +59,6 @@ impl RegistrarService for MyRegistrarService {
         info!("Kayıt işlemi: {} -> {} (Expires: {})", normalized_uri, req.contact_uri, req.expires);
 
         let mut conn = self.redis.lock().await;
-        // Expires i32 -> u64 dönüşümü
         let _: () = conn.set_ex(&key, &req.contact_uri, req.expires as u64)
             .await
             .map_err(|e| {
@@ -89,7 +76,6 @@ impl RegistrarService for MyRegistrarService {
     ) -> Result<Response<UnregisterResponse>, Status> {
         let req = request.into_inner();
         
-        // KRİTİK DÜZELTME: Normalizasyon
         let normalized_uri = normalize_sip_uri(&req.sip_uri);
         let key = format!("sip_registration:{}", normalized_uri);
         
@@ -110,9 +96,9 @@ impl RegistrarService for MyRegistrarService {
         &self,
         request: Request<LookupContactRequest>,
     ) -> Result<Response<LookupContactResponse>, Status> {
+        info!("🔫 [TRACE-REGISTRAR] LookupContact isteği alındı.");
         let req = request.into_inner();
         
-        // KRİTİK DÜZELTME: Normalizasyon
         let normalized_uri = normalize_sip_uri(&req.sip_uri);
         let key = format!("sip_registration:{}", normalized_uri);
         
