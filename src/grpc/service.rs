@@ -29,10 +29,10 @@ impl MyRegistrarService {
         }
     }
     
-    // YARDIMCI: Redis Anahtarı Oluşturucu (Standart)
+    // YARDIMCI: Redis Anahtarı Oluşturucu (Standartlaştırılmış)
     fn generate_redis_key(&self, raw_uri: &str) -> String {
         // Core kütüphane ile AOR (Address of Record) çıkarma.
-        // Örn: "Bob <sip:bob@biloxi.com>;tag=..." -> "sip:bob@biloxi.com"
+        // Regex tabanlı temizleme: "Bob <sip:bob@biloxi.com>;tag=..." -> "sip:bob@biloxi.com"
         let aor = sip_utils::extract_aor(raw_uri);
         format!("sip_registration:{}", aor)
     }
@@ -48,7 +48,6 @@ impl RegistrarService for MyRegistrarService {
     ) -> Result<Response<RegisterResponse>, Status> {
         let req = request.into_inner();
         
-        // STANDARDIZASYON: Kütüphane tabanlı anahtar üretimi
         let key = self.generate_redis_key(&req.sip_uri);
         
         info!("Kayıt işlemi: {} -> {} (Expires: {})", key, req.contact_uri, req.expires);
@@ -101,13 +100,11 @@ impl RegistrarService for MyRegistrarService {
         let contact: Option<String> = conn.get(&key).await.ok();
 
         if let Some(c) = contact {
-            // [DEBUG-TRACE] Başarılı lookup
             info!("✅ Lookup Başarılı: {} -> {}", key, c);
             Ok(Response::new(LookupContactResponse { 
                 contact_uris: vec![c] 
             }))
         } else {
-            // [DEBUG-TRACE] Başarısız lookup
             info!("❌ Lookup Başarısız (Kayıt Yok): {}", key);
             Ok(Response::new(LookupContactResponse { 
                 contact_uris: vec![] 
