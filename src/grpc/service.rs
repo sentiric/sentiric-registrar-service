@@ -1,4 +1,5 @@
 // sentiric-registrar-service/src/grpc/service.rs
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use redis::AsyncCommands;
@@ -11,20 +12,8 @@ use sentiric_contracts::sentiric::sip::v1::{
 use tonic::{Request, Response, Status};
 use tracing::{info, error, instrument, debug};
 use crate::grpc::client::InternalClients;
-
-fn normalize_sip_uri(uri: &str) -> String {
-    let mut s = uri.trim();
-    s = s.trim_start_matches('<').trim_end_matches('>');
-    if s.starts_with("sip:") {
-        s = &s[4..];
-    } else if s.starts_with("sips:") {
-        s = &s[5..];
-    }
-    if let Some(semicolon_idx) = s.find(';') {
-        s = &s[..semicolon_idx];
-    }
-    s.to_string()
-}
+// YENİ: Kütüphaneden standart utils kullanımı
+use sentiric_sip_core::utils as sip_utils; 
 
 pub struct MyRegistrarService {
     redis: Arc<Mutex<redis::aio::MultiplexedConnection>>,
@@ -39,6 +28,14 @@ impl MyRegistrarService {
             clients,
         }
     }
+    
+    // YARDIMCI: Redis Anahtarı Oluşturucu (Standart)
+    fn generate_redis_key(&self, raw_uri: &str) -> String {
+        // Core kütüphane ile AOR (Address of Record) çıkarma.
+        // Örn: "Bob <sip:bob@biloxi.com>;tag=..." -> "sip:bob@biloxi.com"
+        let aor = sip_utils::extract_aor(raw_uri);
+        format!("sip_registration:{}", aor)
+    }
 }
 
 #[tonic::async_trait]
@@ -49,16 +46,15 @@ impl RegistrarService for MyRegistrarService {
         &self,
         request: Request<RegisterRequest>,
     ) -> Result<Response<RegisterResponse>, Status> {
-        info!("🔫 [TRACE-REGISTRAR] Register isteği alındı.");
         let req = request.into_inner();
         
-        let normalized_uri = normalize_sip_uri(&req.sip_uri);
-        let key = format!("sip_registration:{}", normalized_uri);
+        // STANDARDIZASYON: Kütüphane tabanlı anahtar üretimi
+        let key = self.generate_redis_key(&req.sip_uri);
         
-        debug!("URI Normalizasyonu: '{}' -> '{}' -> Key: {}", req.sip_uri, normalized_uri, key);
-        info!("Kayıt işlemi: {} -> {} (Expires: {})", normalized_uri, req.contact_uri, req.expires);
+        info!("Kayıt işlemi: {} -> {} (Expires: {})", key, req.contact_uri, req.expires);
 
         let mut conn = self.redis.lock().await;
+        // TTL ile Redis'e yazma
         let _: () = conn.set_ex(&key, &req.contact_uri, req.expires as u64)
             .await
             .map_err(|e| {
@@ -76,8 +72,7 @@ impl RegistrarService for MyRegistrarService {
     ) -> Result<Response<UnregisterResponse>, Status> {
         let req = request.into_inner();
         
-        let normalized_uri = normalize_sip_uri(&req.sip_uri);
-        let key = format!("sip_registration:{}", normalized_uri);
+        let key = self.generate_redis_key(&req.sip_uri);
         
         let mut conn = self.redis.lock().await;
         let _: () = conn.del(&key)
@@ -87,7 +82,7 @@ impl RegistrarService for MyRegistrarService {
                 Status::internal("Redis Error")
             })?;
 
-        info!("Kayıt silindi: {}", normalized_uri);
+        info!("Kayıt silindi: {}", key);
         Ok(Response::new(UnregisterResponse { success: true }))
     }
 
@@ -96,24 +91,24 @@ impl RegistrarService for MyRegistrarService {
         &self,
         request: Request<LookupContactRequest>,
     ) -> Result<Response<LookupContactResponse>, Status> {
-        info!("🔫 [TRACE-REGISTRAR] LookupContact isteği alındı.");
         let req = request.into_inner();
         
-        let normalized_uri = normalize_sip_uri(&req.sip_uri);
-        let key = format!("sip_registration:{}", normalized_uri);
+        let key = self.generate_redis_key(&req.sip_uri);
         
-        debug!("Lookup URI Normalizasyonu: '{}' -> '{}'", req.sip_uri, normalized_uri);
+        debug!("Lookup Key: '{}'", key);
         
         let mut conn = self.redis.lock().await;
         let contact: Option<String> = conn.get(&key).await.ok();
 
         if let Some(c) = contact {
-            info!("Lookup başarılı: {} -> {}", normalized_uri, c);
+            // [DEBUG-TRACE] Başarılı lookup
+            info!("✅ Lookup Başarılı: {} -> {}", key, c);
             Ok(Response::new(LookupContactResponse { 
                 contact_uris: vec![c] 
             }))
         } else {
-            info!("Lookup başarısız (Kayıt yok): {}", normalized_uri);
+            // [DEBUG-TRACE] Başarısız lookup
+            info!("❌ Lookup Başarısız (Kayıt Yok): {}", key);
             Ok(Response::new(LookupContactResponse { 
                 contact_uris: vec![] 
             }))
