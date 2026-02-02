@@ -1,21 +1,26 @@
 [package]
 name = "sentiric-registrar-service"
-version = "1.0.3"
+version = "1.1.0"
 edition = "2021"
 
 [dependencies]
+# Async & Network
 tokio = { version = "1", features = ["full"] }
 tonic = { version = "0.11", features = ["tls", "tls-roots"] }
 prost = "0.12"
+hyper = { version = "0.14", features = ["full"] }
+
+# Observability
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Data & Config
 dotenvy = "0.15"
 anyhow = "1.0"
 thiserror = "1.0"
-hyper = { version = "0.14.28", features = ["full"] } 
-config = "0.14" 
+config = "0.14"
 redis = { version = "0.26", features = ["tokio-rustls-comp"] }
-md5 = "0.7"
 
+# --- THE IRON CORE ---
+sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.3.3" }
 sentiric-contracts = { git = "https://github.com/sentiric/sentiric-contracts.git", tag = "v1.13.6" }
-sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.3.1" }

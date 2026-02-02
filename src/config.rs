@@ -1,4 +1,3 @@
-// sentiric-registrar-service/src/config.rs
 use anyhow::{Context, Result};
 use std::env;
 use std::net::SocketAddr;
@@ -44,7 +43,7 @@ impl AppConfig {
             
             env: env::var("ENV").unwrap_or_else(|_| "production".to_string()),
             rust_log: env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
-            service_version: env::var("SERVICE_VERSION").unwrap_or_else(|_| "1.0.0".to_string()),
+            service_version: env::var("SERVICE_VERSION").unwrap_or_else(|_| "1.1.0".to_string()),
             
             cert_path: env::var("REGISTRAR_SERVICE_CERT_PATH").context("ZORUNLU: REGISTRAR_SERVICE_CERT_PATH eksik")?,
             key_path: env::var("REGISTRAR_SERVICE_KEY_PATH").context("ZORUNLU: REGISTRAR_SERVICE_KEY_PATH eksik")?,

@@ -3,7 +3,7 @@ use crate::config::AppConfig;
 use crate::grpc::service::MyRegistrarService;
 use crate::grpc::client::InternalClients;
 use crate::tls::load_server_tls_config;
-use anyhow::{Context, Result}; // DÜZELTME: 'anyhow' makrosu kaldırıldı
+use anyhow::{Context, Result};
 use sentiric_contracts::sentiric::sip::v1::registrar_service_server::RegistrarServiceServer;
 use std::convert::Infallible;
 use std::env;
@@ -65,7 +65,7 @@ impl App {
         let redis_conn = redis_client.get_multiplexed_async_connection().await
             .context("Redis bağlantısı kurulamadı")?;
         
-        // 2. gRPC İstemcileri
+        // 2. gRPC İstemcileri (User Service için)
         let clients = Arc::new(Mutex::new(InternalClients::connect(&self.config).await?));
 
         // 3. gRPC Sunucusunu Başlat
@@ -106,7 +106,7 @@ impl App {
         
         tokio::select! {
             res = grpc_server_handle => { if let Err(e) = res? { error!("gRPC Error: {}", e); } },
-            _res = http_server_handle => { error!("HTTP Server durdu"); }, // DÜZELTME: _res kullanıldı
+            _res = http_server_handle => { error!("HTTP Server durdu"); },
             _ = ctrl_c => { warn!("Kapatma sinyali alındı."); },
         }
 
