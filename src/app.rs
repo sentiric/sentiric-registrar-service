@@ -3,6 +3,8 @@ use crate::config::AppConfig;
 use crate::grpc::service::MyRegistrarService;
 use crate::grpc::client::InternalClients;
 use crate::tls::load_server_tls_config;
+use crate::data::store::RegistrationStore; // ✅ EKLENDİ
+
 use anyhow::{Context, Result};
 use sentiric_contracts::sentiric::sip::v1::registrar_service_server::RegistrarServiceServer;
 use std::convert::Infallible;
@@ -64,8 +66,12 @@ impl App {
             .context("Redis URL hatalı")?;
         let redis_conn = redis_client.get_multiplexed_async_connection().await
             .context("Redis bağlantısı kurulamadı")?;
+        let redis_mutex = Arc::new(Mutex::new(redis_conn));
         
-        // 2. gRPC İstemcileri (User Service için)
+        // ✅ Store Oluştur
+        let store = RegistrationStore::new(redis_mutex);
+
+        // 2. gRPC İstemcileri
         let clients = Arc::new(Mutex::new(InternalClients::connect(&self.config).await?));
 
         // 3. gRPC Sunucusunu Başlat
@@ -73,8 +79,8 @@ impl App {
         let grpc_server_handle = tokio::spawn(async move {
             let tls_config = load_server_tls_config(&grpc_config).await.expect("TLS hatası");
             
-            // Servisi oluştur ve Redis bağlantısını ver
-            let grpc_service = MyRegistrarService::new(redis_conn, clients);
+            // ✅ Servise Store'u ver
+            let grpc_service = MyRegistrarService::new(store, clients);
             
             info!(address = %grpc_config.grpc_listen_addr, "gRPC sunucusu başlatılıyor...");
             
