@@ -1,9 +1,11 @@
+// sentiric-registrar-service/src/data/store.rs
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use redis::AsyncCommands;
 use tracing::{info, debug, warn};
 use sentiric_sip_core::utils as sip_utils;
 
+// TİP TANIMI: Modül seviyesinde bağımsız bir takma ad.
 pub type RedisConn = Arc<Mutex<redis::aio::MultiplexedConnection>>;
 
 #[derive(Clone)]
@@ -16,12 +18,11 @@ impl RegistrationStore {
         Self { redis }
     }
 
-    /// Redis Anahtarı Oluşturucu (Normalize Edilmiş)
-    /// "sip:1001@domain.com" -> "sip_reg:1001"
+    /// Redis anahtarını standart formatta oluşturur.
     fn generate_key(&self, raw_uri: &str) -> String {
         let username = sip_utils::extract_username_from_uri(raw_uri);
         if username.is_empty() {
-             warn!("Username çıkarılamadı, raw URI kullanılıyor: {}", raw_uri);
+             warn!("Username extraction failed for URI: {}", raw_uri);
              return format!("sip_reg:{}", raw_uri);
         }
         format!("sip_reg:{}", username)
@@ -33,10 +34,10 @@ impl RegistrationStore {
 
         if expires <= 0 {
              let _: () = conn.del(&key).await?;
-             info!("🗑️ Kayıt silindi (Expires=0): {}", key);
+             info!("🗑️ Registration deleted: {}", key);
         } else {
             let _: () = conn.set_ex(&key, contact_uri, expires as u64).await?;
-            debug!("💾 Kayıt başarılı: {} -> {}", key, contact_uri);
+            debug!("💾 Registration saved: {} -> {}", key, contact_uri);
         }
         Ok(())
     }
@@ -44,9 +45,8 @@ impl RegistrationStore {
     pub async fn unregister_user(&self, sip_uri: &str) -> anyhow::Result<()> {
         let key = self.generate_key(sip_uri);
         let mut conn = self.redis.lock().await;
-        
         let _: () = conn.del(&key).await?;
-        info!("🗑️ Kayıt manuel silindi: {}", key);
+        info!("🗑️ Manual unregister: {}", key);
         Ok(())
     }
 
@@ -55,14 +55,8 @@ impl RegistrationStore {
         let mut conn = self.redis.lock().await;
         
         match conn.get::<_, String>(&key).await {
-            Ok(contact) => {
-                debug!("✅ Bulundu: {} -> {}", key, contact);
-                Some(contact)
-            },
-            Err(_) => {
-                debug!("❌ Bulunamadı (Offline): {}", key);
-                None
-            }
+            Ok(contact) => Some(contact),
+            Err(_) => None
         }
     }
 }
