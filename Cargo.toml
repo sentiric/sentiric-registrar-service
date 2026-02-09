@@ -22,5 +22,5 @@ config = "0.14"
 redis = { version = "0.26", features = ["tokio-rustls-comp"] }
 
 # --- THE IRON CORE (UPGRADED) ---
-sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.4.1" }
-sentiric-contracts = { git = "https://github.com/sentiric/sentiric-contracts.git", tag = "v1.15.0" }
+sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.4.2" }
+sentiric-contracts = { git = "https://github.com/sentiric/sentiric-contracts.git", tag = "v1.16.0" }
