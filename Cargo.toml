@@ -21,6 +21,6 @@ thiserror = "1.0"
 config = "0.14"
 redis = { version = "0.26", features = ["tokio-rustls-comp"] }
 
-# --- THE IRON CORE (UPGRADED) ---
-sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.4.2" }
+# --- THE IRON CORE ---
+sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.4.3" }
 sentiric-contracts = { git = "https://github.com/sentiric/sentiric-contracts.git", tag = "v1.16.0" }
