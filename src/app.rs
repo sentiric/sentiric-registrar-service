@@ -2,13 +2,14 @@
 use crate::config::AppConfig;
 use crate::grpc::service::MyRegistrarService;
 use crate::grpc::client::InternalClients;
-use crate::data::store::{RegistrationStore, RedisConn}; // KRİTİK DÜZELTME: RedisConn doğrudan import edildi.
+use crate::data::store::{RegistrationStore, RedisConn};
 use crate::tls::load_server_tls_config;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tonic::transport::Server as GrpcServer;
 use sentiric_contracts::sentiric::sip::v1::registrar_service_server::RegistrarServiceServer;
 use tracing::{info, error};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry}; // EKLENDİ
 
 pub struct App {
     config: Arc<AppConfig>,
@@ -19,11 +20,15 @@ impl App {
         dotenvy::dotenv().ok();
         let config = Arc::new(AppConfig::load_from_env()?);
         
-        // Loglama başlatma (tek seferlik kontrol ile)
-        if tracing::dispatcher::get_default(|_| true) {
-            // Logger zaten aktif.
+        // [DEĞİŞİKLİK]: Loglama başlatma
+        let rust_log_env = std::env::var("RUST_LOG").unwrap_or_else(|_| config.rust_log.clone());
+        let env_filter = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new(&rust_log_env))?;
+        let subscriber = Registry::default().with(env_filter);
+        
+        if config.env == "production" {
+            subscriber.with(fmt::layer().json()).init();
         } else {
-            tracing_subscriber::fmt::init();
+            subscriber.with(fmt::layer().compact()).init();
         }
         
         Ok(Self { config })
@@ -58,7 +63,6 @@ impl App {
         Ok(())
     }
 
-    // KRİTİK DÜZELTME: Dönüş tipi RegistrationStore::RedisConn yerine doğrudan RedisConn yapıldı.
     async fn init_redis(&self) -> anyhow::Result<RedisConn> {
         loop {
             match redis::Client::open(self.config.redis_url.as_str()) {
