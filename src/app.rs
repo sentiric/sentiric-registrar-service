@@ -1,15 +1,16 @@
-// sentiric-registrar-service/src/app.rs
+// src/app.rs
 use crate::config::AppConfig;
 use crate::grpc::service::MyRegistrarService;
 use crate::grpc::client::InternalClients;
 use crate::data::store::{RegistrationStore, RedisConn};
 use crate::tls::load_server_tls_config;
+use crate::telemetry::SutsFormatter; // YENİ
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tonic::transport::Server as GrpcServer;
 use sentiric_contracts::sentiric::sip::v1::registrar_service_server::RegistrarServiceServer;
-use tracing::{info, error};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry}; // EKLENDİ
+use tracing::{info, error, warn};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry};
 
 pub struct App {
     config: Arc<AppConfig>,
@@ -20,16 +21,30 @@ impl App {
         dotenvy::dotenv().ok();
         let config = Arc::new(AppConfig::load_from_env()?);
         
-        // [DEĞİŞİKLİK]: Loglama başlatma
+        // --- SUTS v4.0 LOGGING SETUP ---
         let rust_log_env = std::env::var("RUST_LOG").unwrap_or_else(|_| config.rust_log.clone());
         let env_filter = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new(&rust_log_env))?;
         let subscriber = Registry::default().with(env_filter);
         
-        if config.env == "production" {
-            subscriber.with(fmt::layer().json()).init();
+        if config.log_format == "json" {
+            let suts_formatter = SutsFormatter::new(
+                "registrar-service".to_string(),
+                config.service_version.clone(),
+                config.env.clone(),
+                config.node_hostname.clone(),
+            );
+            subscriber.with(fmt::layer().event_format(suts_formatter)).init();
         } else {
             subscriber.with(fmt::layer().compact()).init();
         }
+        
+        info!(
+            event = "SYSTEM_STARTUP",
+            service_name = "sentiric-registrar-service",
+            version = %config.service_version,
+            profile = %config.env,
+            "🚀 Registrar Service başlatılıyor (SUTS v4.0)"
+        );
         
         Ok(Self { config })
     }
@@ -48,16 +63,27 @@ impl App {
         let tls_config = load_server_tls_config(&self.config).await?;
         let grpc_service = MyRegistrarService::new(store, clients, self.config.clone());
 
-        info!("🚀 Registrar Service active on {}", self.config.grpc_listen_addr);
+        info!(event="GRPC_SERVER_START", addr=%self.config.grpc_listen_addr, "Registrar gRPC aktif.");
 
-        GrpcServer::builder()
-            .tls_config(tls_config)?
-            .add_service(RegistrarServiceServer::new(grpc_service))
-            .serve_with_shutdown(self.config.grpc_listen_addr, async {
-                shutdown_rx.recv().await;
-                info!("gRPC server shutting down...");
-            })
-            .await?;
+        let server_handle = tokio::spawn(async move {
+            GrpcServer::builder()
+                .tls_config(tls_config).unwrap()
+                .add_service(RegistrarServiceServer::new(grpc_service))
+                .serve_with_shutdown(self.config.grpc_listen_addr, async {
+                    shutdown_rx.recv().await;
+                    info!(event="GRPC_SHUTDOWN", "gRPC sunucusu kapanıyor...");
+                })
+                .await
+        });
+
+        tokio::select! {
+            res = server_handle => { 
+                if let Ok(Err(e)) = res { error!(event="SERVER_ERROR", error=%e, "Sunucu çöktü"); }
+            }
+            _ = tokio::signal::ctrl_c() => {
+                warn!(event="SIGINT", "Kapatma sinyali alındı.");
+            }
+        }
 
         let _ = shutdown_tx.send(());
         Ok(())
@@ -69,13 +95,13 @@ impl App {
                 Ok(client) => {
                     match client.get_multiplexed_async_connection().await {
                         Ok(conn) => {
-                            info!("✅ Connected to Redis successfully.");
+                            info!(event="REDIS_CONNECTED", url=%self.config.redis_url, "Redis bağlantısı başarılı.");
                             return Ok(Arc::new(Mutex::new(conn)));
                         },
-                        Err(e) => error!("Redis async connection failed: {}. Retrying in 5s...", e),
+                        Err(e) => error!(event="REDIS_CONNECT_FAIL", error=%e, "Redis asenkron bağlantı hatası. 5sn sonra tekrar..."),
                     }
                 },
-                Err(e) => error!("Redis client creation failed: {}. Retrying in 5s...", e),
+                Err(e) => error!(event="REDIS_CLIENT_FAIL", error=%e, "Redis istemci oluşturma hatası. 5sn sonra tekrar..."),
             }
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }

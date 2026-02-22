@@ -1,11 +1,10 @@
-// sentiric-registrar-service/src/data/store.rs
+// src/data/store.rs
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use redis::AsyncCommands;
-use tracing::{info, debug, warn};
+use tracing::{info, debug, warn, instrument};
 use sentiric_sip_core::utils as sip_utils;
 
-// TİP TANIMI: Modül seviyesinde bağımsız bir takma ad.
 pub type RedisConn = Arc<Mutex<redis::aio::MultiplexedConnection>>;
 
 #[derive(Clone)]
@@ -18,45 +17,53 @@ impl RegistrationStore {
         Self { redis }
     }
 
-    /// Redis anahtarını standart formatta oluşturur.
     fn generate_key(&self, raw_uri: &str) -> String {
         let username = sip_utils::extract_username_from_uri(raw_uri);
         if username.is_empty() {
-             warn!("Username extraction failed for URI: {}", raw_uri);
+             warn!(event="URI_PARSE_WARN", uri=%raw_uri, "Username extraction failed, using raw URI");
              return format!("sip_reg:{}", raw_uri);
         }
         format!("sip_reg:{}", username)
     }
 
+    #[instrument(skip(self), fields(key))]
     pub async fn register_user(&self, sip_uri: &str, contact_uri: &str, expires: i32) -> anyhow::Result<()> {
         let key = self.generate_key(sip_uri);
         let mut conn = self.redis.lock().await;
 
         if expires <= 0 {
              let _: () = conn.del(&key).await?;
-             info!("🗑️ Registration deleted: {}", key);
+             info!(event="SIP_UNREGISTER_EXPIRE", key=%key, "Kayıt süresi dolduğu için silindi");
         } else {
             let _: () = conn.set_ex(&key, contact_uri, expires as u64).await?;
-            debug!("💾 Registration saved: {} -> {}", key, contact_uri);
+            debug!(event="SIP_REGISTER_STORED", key=%key, contact=%contact_uri, ttl=%expires, "Kayıt Redis'e yazıldı");
         }
         Ok(())
     }
 
+    #[instrument(skip(self), fields(key))]
     pub async fn unregister_user(&self, sip_uri: &str) -> anyhow::Result<()> {
         let key = self.generate_key(sip_uri);
         let mut conn = self.redis.lock().await;
         let _: () = conn.del(&key).await?;
-        info!("🗑️ Manual unregister: {}", key);
+        info!(event="SIP_UNREGISTER_MANUAL", key=%key, "Kullanıcı manuel silindi");
         Ok(())
     }
 
+    #[instrument(skip(self), fields(key))]
     pub async fn lookup_user(&self, sip_uri: &str) -> Option<String> {
         let key = self.generate_key(sip_uri);
         let mut conn = self.redis.lock().await;
         
         match conn.get::<_, String>(&key).await {
-            Ok(contact) => Some(contact),
-            Err(_) => None
+            Ok(contact) => {
+                debug!(event="SIP_LOCATION_FOUND", key=%key, contact=%contact, "Konum bulundu");
+                Some(contact)
+            },
+            Err(_) => {
+                warn!(event="SIP_LOCATION_MISS", key=%key, "Konum bulunamadı (Offline)");
+                None
+            }
         }
     }
 }

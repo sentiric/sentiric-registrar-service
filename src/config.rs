@@ -1,3 +1,4 @@
+// src/config.rs
 use anyhow::{Context, Result};
 use std::env;
 use std::net::SocketAddr;
@@ -12,10 +13,13 @@ pub struct AppConfig {
     pub user_service_url: String,
     
     // SIP Config
-    pub sip_realm: String, // Digest Auth için Realm
+    pub sip_realm: String,
     
+    // Observability
     pub env: String,
     pub rust_log: String,
+    pub log_format: String, // YENİ
+    pub node_hostname: String, // YENİ
     pub service_version: String,
     
     // TLS Yolları
@@ -43,8 +47,10 @@ impl AppConfig {
             
             env: env::var("ENV").unwrap_or_else(|_| "production".to_string()),
             rust_log: env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
-            service_version: env::var("SERVICE_VERSION").unwrap_or_else(|_| "1.1.0".to_string()),
-            
+            log_format: env::var("LOG_FORMAT").unwrap_or_else(|_| "json".to_string()),
+            service_version: env::var("SERVICE_VERSION").unwrap_or_else(|_| "1.1.4".to_string()),
+            node_hostname: env::var("NODE_HOSTNAME").unwrap_or_else(|_| "localhost".to_string()),
+
             cert_path: env::var("REGISTRAR_SERVICE_CERT_PATH").context("ZORUNLU: REGISTRAR_SERVICE_CERT_PATH eksik")?,
             key_path: env::var("REGISTRAR_SERVICE_KEY_PATH").context("ZORUNLU: REGISTRAR_SERVICE_KEY_PATH eksik")?,
             ca_path: env::var("GRPC_TLS_CA_PATH").context("ZORUNLU: GRPC_TLS_CA_PATH eksik")?,
