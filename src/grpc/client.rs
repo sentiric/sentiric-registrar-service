@@ -23,7 +23,6 @@ impl InternalClients {
 }
 
 async fn create_secure_channel(url: &str, server_name: &str, config: &AppConfig) -> Result<Channel> {
-    // DÜZELTME: URL Normalizasyonu (http -> https zorlama ve prefix kontrolü)
     let target_url = if url.starts_with("https://") {
         url.to_string()
     } else if url.starts_with("http://") {
@@ -46,8 +45,12 @@ async fn create_secure_channel(url: &str, server_name: &str, config: &AppConfig)
 
     info!(url=%target_url, server_name=%server_name, "Güvenli gRPC kanalına bağlanılıyor...");
 
+    // [KRİTİK DÜZELTME]: HTTP/2 Keep-Alive eklendi.
     let channel = Channel::from_shared(target_url)?
         .connect_timeout(Duration::from_secs(5))
+        .keep_alive_while_idle(true)
+        .http2_keep_alive_interval(Duration::from_secs(15))
+        .keep_alive_timeout(Duration::from_secs(5))
         .tls_config(tls_config)?
         .connect()
         .await?;
