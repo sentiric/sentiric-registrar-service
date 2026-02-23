@@ -26,5 +26,5 @@ redis = { version = "0.26", features = ["tokio-rustls-comp"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # --- THE IRON CORE ---
-sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.5.5" }
+sentiric-sip-core = { git = "https://github.com/sentiric/sentiric-sip-core.git", tag = "v1.5.6" }
 sentiric-contracts = { git = "https://github.com/sentiric/sentiric-contracts.git", tag = "v1.17.0" }
