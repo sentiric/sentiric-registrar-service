@@ -4,7 +4,7 @@ use crate::grpc::service::MyRegistrarService;
 use crate::grpc::client::InternalClients;
 use crate::data::store::{RegistrationStore, RedisConn};
 use crate::tls::load_server_tls_config;
-use crate::telemetry::SutsFormatter; // YENİ
+use crate::telemetry::SutsFormatter; 
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tonic::transport::Server as GrpcServer;
@@ -43,7 +43,7 @@ impl App {
             service_name = "sentiric-registrar-service",
             version = %config.service_version,
             profile = %config.env,
-            "🚀 Registrar Service başlatılıyor (SUTS v4.0)"
+            "🚀 Registrar Service başlatılıyor (SUTS v4.0 - AutoHealing Redis)"
         );
         
         Ok(Self { config })
@@ -52,9 +52,9 @@ impl App {
     pub async fn run(self) -> anyhow::Result<()> {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
 
-        // 1. Redis Connection with Retry
-        let redis_mutex = self.init_redis().await?;
-        let store = RegistrationStore::new(redis_mutex);
+        // 1. Redis Connection (Auto-Healing ConnectionManager)
+        let redis_conn = self.init_redis().await?;
+        let store = RegistrationStore::new(redis_conn);
 
         // 2. Internal gRPC Clients
         let clients = Arc::new(Mutex::new(InternalClients::connect(&self.config).await?));
@@ -93,10 +93,11 @@ impl App {
         loop {
             match redis::Client::open(self.config.redis_url.as_str()) {
                 Ok(client) => {
-                    match client.get_multiplexed_async_connection().await {
+                    // [KRİTİK DÜZELTME]: ConnectionManager başlatıyoruz.
+                    match redis::aio::ConnectionManager::new(client).await {
                         Ok(conn) => {
-                            info!(event="REDIS_CONNECTED", url=%self.config.redis_url, "Redis bağlantısı başarılı.");
-                            return Ok(Arc::new(Mutex::new(conn)));
+                            info!(event="REDIS_CONNECTED", url=%self.config.redis_url, "Redis Auto-Healing ConnectionManager başarıyla başlatıldı.");
+                            return Ok(conn);
                         },
                         Err(e) => error!(event="REDIS_CONNECT_FAIL", error=%e, "Redis asenkron bağlantı hatası. 5sn sonra tekrar..."),
                     }

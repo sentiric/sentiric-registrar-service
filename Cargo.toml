@@ -1,6 +1,6 @@
 [package]
 name = "sentiric-registrar-service"
-version = "1.1.4"
+version = "1.1.5"
 edition = "2021"
 
 [dependencies]
@@ -8,6 +8,7 @@ edition = "2021"
 tokio = { version = "1", features = ["full"] }
 tonic = { version = "0.11", features = ["tls", "tls-roots"] }
 prost = "0.12"
+prost-types = "0.12"
 hyper = { version = "0.14", features = ["full"] }
 
 # Observability
@@ -15,14 +16,15 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-hostname = "0.3" # YENİ: Hostname tespiti için
+hostname = "0.3" 
 
 # Data & Config
 dotenvy = "0.15"
 anyhow = "1.0"
 thiserror = "1.0"
 config = "0.14"
-redis = { version = "0.26", features = ["tokio-rustls-comp"] }
+#[KRİTİK DÜZELTME]: connection-manager özelliği eklendi
+redis = { version = "0.26", features = ["tokio-rustls-comp", "connection-manager"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 # --- THE IRON CORE ---

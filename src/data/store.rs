@@ -1,11 +1,11 @@
 // src/data/store.rs
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use redis::AsyncCommands;
+use redis::aio::ConnectionManager;
 use tracing::{info, debug, warn, instrument};
 use sentiric_sip_core::utils as sip_utils;
 
-pub type RedisConn = Arc<Mutex<redis::aio::MultiplexedConnection>>;
+// Artık Arc<Mutex<...>> kullanmıyoruz, ConnectionManager kendi içinde güvenlidir ve kopmaları yönetir.
+pub type RedisConn = ConnectionManager;
 
 #[derive(Clone)]
 pub struct RegistrationStore {
@@ -29,7 +29,8 @@ impl RegistrationStore {
     #[instrument(skip(self), fields(key))]
     pub async fn register_user(&self, sip_uri: &str, contact_uri: &str, expires: i32) -> anyhow::Result<()> {
         let key = self.generate_key(sip_uri);
-        let mut conn = self.redis.lock().await;
+        // ConnectionManager ucuz bir şekilde kopyalanabilir (clone), içindeki havuzu paylaşır.
+        let mut conn = self.redis.clone();
 
         if expires <= 0 {
              let _: () = conn.del(&key).await?;
@@ -44,7 +45,7 @@ impl RegistrationStore {
     #[instrument(skip(self), fields(key))]
     pub async fn unregister_user(&self, sip_uri: &str) -> anyhow::Result<()> {
         let key = self.generate_key(sip_uri);
-        let mut conn = self.redis.lock().await;
+        let mut conn = self.redis.clone();
         let _: () = conn.del(&key).await?;
         info!(event="SIP_UNREGISTER_MANUAL", key=%key, "Kullanıcı manuel silindi");
         Ok(())
@@ -53,7 +54,7 @@ impl RegistrationStore {
     #[instrument(skip(self), fields(key))]
     pub async fn lookup_user(&self, sip_uri: &str) -> Option<String> {
         let key = self.generate_key(sip_uri);
-        let mut conn = self.redis.lock().await;
+        let mut conn = self.redis.clone();
         
         match conn.get::<_, String>(&key).await {
             Ok(contact) => {
